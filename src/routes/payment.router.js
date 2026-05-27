@@ -1,5 +1,5 @@
 const express = require('express');
-const { create, approve, uploadVoucher, webhookYape } = require('../controllers/payment.controllers');
+const { create, approve, uploadVoucher, webhookYape, destroy } = require('../controllers/payment.controllers');
 const { verifyJWT } = require('../utils/verifyJWT');
 const verifyRoles = require('../utils/verifyRoles');
 const upload = require('../utils/multer');
@@ -20,5 +20,8 @@ paymentRouter.route('/:id/voucher')
 // El admin o el sistema aprueba el pago (Activa la suscripción)
 paymentRouter.route('/:id/approve')
     .post(verifyJWT, verifyRoles('superadmin'), approve); 
+
+paymentRouter.route('/:id')
+    .delete(verifyJWT, verifyRoles('superadmin'), destroy);
 
 module.exports = paymentRouter;

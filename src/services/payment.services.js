@@ -5,6 +5,22 @@ const { activate } = require("./subscription.services");
 const { notifyAdminNewPayment } = require("./notification.service");
 
 const createClaim = async (tallerId, planType) => {
+
+  // === NUEVA VALIDACIÓN: Bloquear si ya tiene un pago pendiente ===
+  const existingPendingPayment = await payment.findOne({
+    where: {
+      tallerId: tallerId,
+      status: "pending"
+    }
+  });
+
+  if (existingPendingPayment) {
+    // Lanzamos un error controlado para que lo capture tu catchError
+    const error = new Error("Ya tienes un pago pendiente de revisión. No puedes solicitar otro cambio hasta que el administrador verifique el actual.");
+    error.statusCode = 400; // Asumiendo que manejas códigos de estado en tu manejador de errores
+    throw error;
+  }
+  
   // Definición de montos según el ENUM de tu modelo
   const prices = {
     estandar: 100.0,
@@ -215,4 +231,27 @@ const processYapeWebhook = async ({
   };
 };
 
-module.exports = { createClaim, approveClaim, uploadVoucherService, processYapeWebhook };
+
+const deleteClaim = async (paymentId) => {
+    const claim = await payment.findByPk(paymentId);
+
+    if (!claim) {
+        const error = new Error("La orden de pago que intentas eliminar no existe.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    // Seguridad: Si ya fue aprobado, es mejor no borrarlo para no descuadrar la contabilidad
+    if (claim.status === "approved") {
+        const error = new Error("No puedes eliminar un pago que ya se encuentra aprobado.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    // Eliminamos físicamente la orden de la base de datos
+    await claim.destroy();
+    
+    return true;
+};
+
+module.exports = { createClaim, approveClaim, uploadVoucherService, processYapeWebhook, deleteClaim };

@@ -156,7 +156,7 @@ const getDashboardStats = async (tallerId) => {
     include: [{ model: user, as: "user", attributes: ["firstName"] }],
     group: ["userId", "user.id"],
     order: [[literal("amount"), "DESC"]],
-    limit: 5,
+    limit: 10,
   });
 
   // 3. Progreso de Órdenes (Para las barras de carga)

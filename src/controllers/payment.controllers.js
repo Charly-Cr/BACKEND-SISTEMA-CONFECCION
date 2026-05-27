@@ -1,6 +1,6 @@
 const catchError = require('../utils/catchError');
 const { taller, payment, user } = require('../models');
-const { createClaim, approveClaim, uploadVoucherService, processYapeWebhook } = require('../services/payment.services');
+const { createClaim, approveClaim, uploadVoucherService, processYapeWebhook, deleteClaim } = require('../services/payment.services');
 
 const create = catchError(async (req, res) => {
     // 1. Sacamos el tallerId directamente del token (req.user)
@@ -79,4 +79,15 @@ const webhookYape = async (req, res) => {
   }
 };
 
-module.exports = { create, approve, uploadVoucher, webhookYape }
+
+const destroy = catchError(async (req, res) => {
+    const { id } = req.params;
+
+    await deleteClaim(id);
+
+    return res.json({
+        message: "El comprobante y la orden de pago han sido eliminados correctamente. El taller puede intentar de nuevo."
+    });
+});
+
+module.exports = { create, approve, uploadVoucher, webhookYape, destroy }
