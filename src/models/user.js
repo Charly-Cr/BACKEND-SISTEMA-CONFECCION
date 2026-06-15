@@ -59,6 +59,15 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: true, // 👈 Cámbialo a TRUE para que el sistema los obligue al entrar
       },
+      currentSessionToken: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      maxDevices: {   // columna para dueños que quieran mas sesiones en pc
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
+      },
     },
     {
       sequelize,
@@ -74,7 +83,6 @@ module.exports = (sequelize, DataTypes) => {
   );
   return user;
 };
-
 
 //  User.prototype.toJSON = function () {
 //      const values = Object.assign({}, this.get());

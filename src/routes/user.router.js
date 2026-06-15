@@ -8,6 +8,7 @@ const {
   logged,
   logout,
   changeMyPassword,
+  updateMaxDevices,
 } = require("../controllers/user.controllers");
 const express = require("express");
 const { verifyJWT } = require("../utils/verifyJWT");
@@ -31,6 +32,11 @@ userRouter.route("/me").get(verifyJWT, logged);
 // Rutas de acciones de sesión
 userRouter.route("/login").post(loginMiddlewares, sessionJWT, login);
 userRouter.route("/logout").post(verifyJWT, logout);
+
+// 2. Ruta dedicada, pulcra y protegida
+userRouter
+  .route("/:userId/devices")
+  .put(verifyJWT, verifyRoles('superadmin'), checkAccessStatusMiddlewares, updateMaxDevices);
 
 // Rutas específicas por ID
 userRouter

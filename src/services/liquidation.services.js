@@ -4,6 +4,7 @@ const {
   operation_catalog,
   user, production_order,
   garment,
+  order_cut,
   sequelize,
 } = require("../models");
 const { Op } = require("sequelize");
@@ -22,6 +23,7 @@ const createLiquidation = async (data) => {
         userId,
         tallerId,
         liquidationId: null, // Solo lo que no ha sido pagado
+        active: true,
         createdAt: {
           [Op.between]: [`${startDate} 00:00:00`, `${endDate} 23:59:59`],
         },
@@ -38,7 +40,7 @@ const getAllLiquidations = async (tallerId, limit, offset) => {
     limit, 
     offset,
     distinct: true,
-    order: [['endDate', 'DESC']],
+    order: [['endDate', 'DESC'], ['id', 'DESC']],
     include: [
       { 
         model: user, 
@@ -54,6 +56,10 @@ const getAllLiquidations = async (tallerId, limit, offset) => {
           {
             model: production_order,
             include: [{ model: garment, attributes: ['name'] }]
+          },
+          {
+            model: order_cut, 
+            attributes: ['cutNumber', 'color'] 
           }
         ]
       }
@@ -118,6 +124,10 @@ const getLiquidationById = async (id) => {
           {
             model: production_order,
             include: [{ model: garment, attributes: ['name'] }]
+          },
+          {
+            model: order_cut, 
+            attributes: ['cutNumber', 'color'] 
           }
         ]
       }

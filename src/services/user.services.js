@@ -2,33 +2,40 @@ const { Op } = require('sequelize');
 const { user, subscription } = require('../models');
 const bcrypt = require("bcrypt");
 
-const getAllUser = async (filter = {}, page = 1, limit = 10, currentUserId) => {
-  // 1. Cálculos de paginación
-  const pageNumber = parseInt(page, 10) || 1;
-  const limitNumber = parseInt(limit, 10) || 10;
-  const offset = (pageNumber - 1) * limitNumber;
 
-  // 2. FILTRO CLAVE: Excluimos al usuario actual (el admin)
-  // Además de los filtros que ya traes (tallerId, etc.)
-  const finalFilter = {
-    ...filter,
-    status: true,
-    id: { [Op.ne]: currentUserId } // <-- AQUÍ: "ID no sea igual al ID del admin logueado"
-  };
+const getAllUser = async ({ role, tallerId, currentUserId, page, limit, search }) => {
+  // El servicio calcula el offset internamente
+  const offset = (page - 1) * limit;
 
+  // 2. Construcción inteligente del filtro (Aquí vive la lógica de negocio)
+  let whereClause = { status: true, id: { [Op.ne]: currentUserId } };
+
+  // Si no es superadmin, restringimos por taller
+  if (role !== 'superadmin') {
+    whereClause.tallerId = tallerId;
+  }
+
+  // Si hay búsqueda, aplicamos los filtros OR
+  if (search) {
+    whereClause[Op.or] = [
+      { firstName: { [Op.iLike]: `%${search}%` } },
+      { phone: { [Op.like]: `%${search}%` } }
+    ];
+  }
+
+  // 3. Consulta a la base de datos
   const { count, rows } = await user.findAndCountAll({
-    where: finalFilter,
-    limit: limitNumber,
+    where: whereClause,
+    limit,
     offset: offset,
-    order: [['firstName', 'ASC']], // Ordenar por nombre es mejor para personal
-    // El defaultScope ya se encarga de quitar el password
+    order: [['firstName', 'ASC']]
   });
 
   return {
     totalItems: count,
-    totalPages: Math.ceil(count / limitNumber),
-    currentPage: pageNumber,
-    users: rows // Mantenemos el nombre de la entidad
+    totalPages: Math.ceil(count / limit),
+    currentPage: page,
+    users: rows
   };
 };
 
@@ -170,6 +177,26 @@ const changePassword = async (userId, currentPassword, newPassword) => {
   return true;
 };
 
+
+const updateMaxDevicesService = async (userId, maxDevices) => {
+  const dbUser = await user.findByPk(userId);
+  
+  if (!dbUser) {
+    // Si tu manejador global no lee errores personalizados, puedes lanzar un error estándar.
+    // Aunque lo ideal es que si no se encuentra, el controlador o el servicio lo manejen.
+    const error = new Error("Dueño de taller no encontrado");
+    error.status = 404; // Si tu middleware global lee error.status, responderá 404 automáticamente
+    throw error;
+  }
+
+  //await dbUser.update({ maxDevices: Number(maxDevices) });
+  await dbUser.update({ maxDevices: parseInt(maxDevices, 10) });
+
+  await dbUser.reload();
+  return dbUser;
+};
+
+
 module.exports = {
   createUser,
   getUserByIdSafe,
@@ -178,5 +205,6 @@ module.exports = {
   putUser,
   removeUser,
   loginPhoneUser,
-  changePassword
+  changePassword,
+  updateMaxDevicesService
 };

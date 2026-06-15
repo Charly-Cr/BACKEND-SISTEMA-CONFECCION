@@ -1,4 +1,4 @@
-const { production_detail, operation_catalog, production_order, user, sequelize } = require('../models');
+const { production_detail, operation_catalog, production_order, user, order_cut, sequelize } = require('../models');
 const { Sequelize } = require('sequelize');
 
 //USANDO PAGINACION
@@ -14,7 +14,8 @@ const getAllByTaller = async (tallerId, onlyPending = false, limit, offset, user
     include: [
       { model: user, as: 'user', attributes: ['firstName'] },
       { model: production_order, as: 'production_order', attributes: ['orderNumber'] },
-      { model: operation_catalog, as: 'operation_catalog', attributes: ['name'] }
+      { model: operation_catalog, as: 'operation_catalog', attributes: ['name'] },
+      { model: order_cut, attributes: ['cutNumber', 'color'] }
     ],
     limit,
     offset,
@@ -45,41 +46,48 @@ const createRecord = async (data) => {
     if (isNaN(qtyToAdd) || qtyToAdd <= 0) {
       throw new Error("La cantidad debe ser un número mayor a cero");
     }
+// -------------------------------------------------------------------------
+    // 4. Obtener la cantidad del corte específico
+const cutOrder = await order_cut.findByPk(data.orderCutId, { transaction: t });
+if (!cutOrder) throw new Error("Corte no encontrado");
 
-    // 4. Sumar progreso actual
-    const currentProgress = await production_detail.findOne({
-      where: { 
-        productionOrderId: data.productionOrderId, 
-        operationId: data.operationId,
-        active: true 
-      },
-      attributes: [
-        [Sequelize.fn('SUM', Sequelize.col('quantityDone')), 'total']
-      ],
-      raw: true,
-      transaction: t
-    });
+// 4.1 Sumar progreso actual para este corte y operación
+const currentProgress = await production_detail.findOne({
+  where: { 
+    productionOrderId: data.productionOrderId, 
+    operationId: data.operationId,
+    orderCutId: data.orderCutId, // 🚀 Filtrado por corte específico
+    active: true 
+  },
+  attributes: [
+    [Sequelize.fn('SUM', Sequelize.col('quantityDone')), 'total']
+  ],
+  raw: true,
+  transaction: t
+});
 
-    const alreadyDone = parseInt(currentProgress?.total || 0);
-    console.log("Total actual en DB:", alreadyDone);
-    const totalWithNew = alreadyDone + qtyToAdd;
+const alreadyDone = parseInt(currentProgress?.total || 0);
+console.log("Total actual en DB para este corte:", alreadyDone);
+const totalWithNew = alreadyDone + qtyToAdd;
 
-    // 5. EL BLOQUEO MAESTRO (Comparación estricta)
-    if (totalWithNew > order.totalQuantity) {
-      const available = order.totalQuantity - alreadyDone;
-      
-      const errorData = {
-        type: 'MAX_CAPACITY_REACHED',
-        operationId: data.operationId,
-        operationName: operation.name, 
-        available: available < 0 ? 0 : available, // Evita números negativos
-        limit: order.totalQuantity,
-        current: alreadyDone,
-        message: `La operación "${operation.name}" ya alcanzó su límite.`
-      };
+    // 5. Validación contra la cantidad máxima de ESTE CORTE
+if (totalWithNew > cutOrder.quantity) {
+  const available = cutOrder.quantity - alreadyDone;
+  
+  const errorData = {
+    type: 'MAX_CAPACITY_REACHED',
+    operationId: data.operationId,
+    operationName: operation.name, 
+    available: available < 0 ? 0 : available,
+    limit: cutOrder.quantity,
+    current: alreadyDone,
+    message: `La operación "${operation.name}" ya alcanzó su límite para este corte.`
+  };
 
-      throw new Error(JSON.stringify(errorData));
-    }
+  throw new Error(JSON.stringify(errorData));
+}
+    
+//  ---------------------------------------------------------------
 
     // 6. Cálculos financieros
     const unitPrice = Number(operation.unitPrice);

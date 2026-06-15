@@ -1,4 +1,4 @@
-const { getPayroll, getDashboard } = require('../controllers/report.controllers');
+const { getPayroll, getDashboard, getFinancialReport } = require('../controllers/report.controllers');
 const express = require('express');
 const { verifyJWT } = require('../utils/verifyJWT');
 const verifyRoles = require('../utils/verifyRoles');
@@ -10,5 +10,9 @@ reportRouter.route('/payroll')  // Nómina de sueldos / Planilla
 
 reportRouter.route('/dashboard')
   .get(verifyJWT, verifyRoles('admin', 'superadmin'), getDashboard);
+
+reportRouter.route('/financial')
+  .get(verifyJWT, verifyRoles('admin', 'superadmin'), getFinancialReport);
+
 
 module.exports = reportRouter;

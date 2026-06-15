@@ -16,19 +16,23 @@ const generateLiquidationPDF = async (data) => {
     const year = new Date().getFullYear();
     const formalID = `${year}-${String(data.id).padStart(6, '0')}`;
 
-    // --- LÓGICA DE AGRUPACIÓN POR OP, OPERACIÓN Y PRENDA ---
+    // --- LÓGICA DE AGRUPACIÓN POR OP, CORTE, COLOR, PRENDA Y OPERACIÓN ---
     const groupedMap = new Map();
     data.production_details.forEach((item) => {
       const opNumber = item.production_order?.orderNumber || "S/N";
       const opName = item.operation_catalog?.name || "OPERACIÓN";
       const garmentName = item.production_order?.garment?.name || "PRENDA";
+      const cutNumber = item.order_cut?.cutNumber || "";
+      const color = item.order_cut?.color || "";
       
-      // La llave ahora incluye el número de OP para separar por lotes
-      const key = `${opNumber}-${opName}-${garmentName}`;
+      // La llave ahora incluye OP, Corte y Color para separar lotes adecuadamente
+      const key = `${opNumber}-${cutNumber}-${color}-${garmentName}-${opName}`;
 
       if (!groupedMap.has(key)) {
         groupedMap.set(key, {
           opNumber: opNumber,
+          cutNumber: cutNumber,
+          color: color,
           opName: opName.toUpperCase(),
           garmentName: garmentName.toUpperCase(),
           totalQty: 0,
@@ -88,7 +92,9 @@ const generateLiquidationPDF = async (data) => {
           th { background: #f1f5f9; color: #475569; text-align: left; padding: 12px; font-size: 10px; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
           td { padding: 14px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
           
-          .op-badge { background: #6366f1; color: white; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; margin-right: 8px; }
+          .op-badge { background: #6366f1; color: white; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; margin-right: 4px; }
+          .cut-badge { background: #cbd5e1; color: #334155; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; margin-right: 4px; }
+          .color-badge { background: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; font-style: italic; margin-right: 8px; }
           .garment-tag { font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase; }
           .op-title { font-weight: 700; font-size: 13px; margin-top: 4px; color: #1e293b; }
           .qty-badge { background: #eff6ff; color: #2563eb; padding: 5px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; border: 1px solid #dbeafe; }
@@ -119,7 +125,7 @@ const generateLiquidationPDF = async (data) => {
         <table>
           <thead>
             <tr>
-              <th>Detalle de Producción (OP / Prenda / Operación)</th>
+              <th>Detalle de Producción (OP / Corte / Color / Prenda / Operación)</th>
               <th style="text-align: center;">Cant. Total</th>
               <th style="text-align: right;">Subtotal</th>
             </tr>
@@ -130,6 +136,8 @@ const generateLiquidationPDF = async (data) => {
                 <td>
                   <div style="display: flex; align-items: center;">
                     <span class="op-badge">OP: ${row.opNumber}</span>
+                    ${row.cutNumber ? `<span class="cut-badge">C: ${row.cutNumber}</span>` : ''}
+                    ${row.color ? `<span class="color-badge">${row.color}</span>` : ''}
                     <span class="garment-tag">${row.garmentName}</span>
                   </div>
                   <div class="op-title">${row.opName}</div>

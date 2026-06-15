@@ -12,7 +12,7 @@ const app = express();
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 2000, // Límite de 100 peticiones por cada IP
+  max: 2000, // Límite de 2000 peticiones por cada IP
   message: {
     message: "Demasiadas peticiones desde esta IP, intenta de nuevo en 15 minutos, bro."
   },

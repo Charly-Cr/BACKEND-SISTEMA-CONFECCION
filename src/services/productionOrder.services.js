@@ -1,4 +1,4 @@
-const { production_order, customer, garment, operation_catalog, production_detail } = require('../models');
+const { production_order, customer, garment, operation_catalog, production_detail, order_cut, sequelize } = require('../models');
 const { Sequelize } = require('sequelize');
 
 const getAllOrders = async (tallerId, limit, offset) => {
@@ -22,7 +22,13 @@ const getAllOrders = async (tallerId, limit, offset) => {
           as: 'operations',
           through: { attributes: [] } 
         }
-      }
+      },
+      { 
+        model: order_cut, 
+        where: { active: true },
+        required: false, // Permite que sigan saliendo los talleres pequeños sin cortes
+        attributes: ['id', 'cutNumber', 'quantity', 'color', 'status'] // 🚀 Trae solo lo necesario para la tabla del front
+      },
     ],
     order: [['createdAt', 'DESC']]
   });
@@ -31,12 +37,44 @@ const getAllOrders = async (tallerId, limit, offset) => {
 
 
 const createOrder = async (orderData) => {
-  // Guardamos usando todo el objeto
-  const newOrder = await production_order.create(orderData);
-  // Extraemos el tallerId para la consulta final
-  const { tallerId } = orderData; 
-  
-  return await getOneOrder(newOrder.id, tallerId);
+  const { tallerId, cuts, ...restOfOrderData } = orderData;
+
+  // Iniciamos la transacción gestionada por Sequelize
+  const t = await sequelize.transaction();
+
+  try {
+    // 1. Creamos la Orden de Producción principal
+    const newOrder = await production_order.create({ 
+      ...restOfOrderData, 
+      tallerId 
+    }, { transaction: t });
+
+    // 2. Si vienen cortes (Taller Grande), los insertamos masivamente
+    if (cuts && cuts.length > 0) {
+      const cutsWithOrderId = cuts.map(c => ({
+        ...c,
+        productionOrderId: newOrder.id,
+        status: 'pending',
+        active: true
+      }));
+
+      // bulkCreate inserta todos los cortes en un solo query optimizado
+      await order_cut.bulkCreate(cutsWithOrderId, { transaction: t, validate: true });
+    }
+
+    // Si todo salió bien, guardamos los cambios definitivamente
+    await t.commit();
+
+    // 3. Retornamos la orden usando tu función existente getOneOrder
+    // Asegúrate de que tu función getOneOrder incluya el modelo Cut si deseas verlos en la respuesta
+    return await getOneOrder(newOrder.id, tallerId);
+
+  } catch (error) {
+    // Si algo falla, deshacemos todo inmediatamente para evitar datos corruptos
+    await t.rollback();
+    console.error("❌ Error en la transacción de createOrder:", error);
+    throw error;
+  }
 };
 
 const getOneOrder = async (id, tallerId) => {
@@ -52,7 +90,13 @@ const getOneOrder = async (id, tallerId) => {
           as: 'operations', 
           through: { attributes: [] } 
         }
-      }
+      },
+      { 
+        model: order_cut, 
+        where: { active: true },
+        required: false, // 👈 OBLIGATORIO: Para que traiga la OP aunque no tenga cortes (Taller pequeño)
+        attributes: ['id', 'cutNumber', 'quantity', 'color', 'status'],
+      },
     ]
   });
 };
@@ -123,4 +167,27 @@ const getOrderStats = async (orderId, tallerId) => {
   };
 };
 
-module.exports = { getAllOrders, createOrder, getOneOrder, updateOrder, deleteOrder, getOrderStats };
+
+const updateCutStatusInOrder = async (cutId, status, tallerId) => {
+
+  // Buscamos el corte asegurándonos de que la OP pertenezca al taller
+  const cut = await order_cut.findOne({
+    where: { id: cutId },
+    include: [{
+      model: production_order,
+      where: { tallerId, active: true }
+    }]
+  });
+
+  if (!cut) {
+    throw new Error("⚠️ El corte no existe o no pertenece a tu taller.");
+  }
+
+  // Actualizamos el ENUM status ('pending', 'in_progress', 'completed')
+  cut.status = status;
+  await cut.save();
+
+  return cut;
+};
+
+module.exports = { getAllOrders, createOrder, getOneOrder, updateOrder, deleteOrder, getOrderStats, updateCutStatusInOrder };

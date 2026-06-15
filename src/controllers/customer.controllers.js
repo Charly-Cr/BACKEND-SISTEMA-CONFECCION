@@ -8,23 +8,24 @@ const {
 const catchError = require('../utils/catchError');
 
 const getAll = catchError(async (req, res) => {
-  // 1. Manejo de parámetros de entrada
+  const { tallerId } = req.user;
+  
+  // Extraemos y validamos tipos (valores por defecto)
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
-  const offset = (page - 1) * limit;
-  const tallerId = req.user.tallerId;
+  const search = req.query.search || "";
 
-  // 2. Llamada al servicio (solo datos puros)
-  const { count, rows } = await getAllCustomers(tallerId, limit, offset);
-
-  // 3. El Controlador decide CÓMO se le entrega al frontend
-  return res.json({
-    totalItems: count,
-    totalPages: Math.ceil(count / limit),
-    currentPage: page,
-    customers: rows 
+  // Delegamos el cálculo y la lógica al servicio
+  const results = await getAllCustomers({ 
+    tallerId, 
+    page, 
+    limit, 
+    search 
   });
+
+  return res.json(results);
 });
+
 
 const create = catchError(async (req, res) => {
   const tallerId = req.user.tallerId;
