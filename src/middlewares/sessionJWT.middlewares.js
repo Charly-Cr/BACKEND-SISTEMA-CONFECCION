@@ -22,6 +22,36 @@ const sessionJWT = async (req, res, next) => {
     process.env.TOKEN_SECRET,
     { expiresIn: JWT_EXPIRATION }, // El token expira en 1 dia
   );
+
+  // 🚀 NUEVA LÓGICA MULTI-DISPOSITIVO (NEGOCIO REDONDO)
+  const maxAllowedDevices = user.maxDevices || 1; // Tu nueva columna de la migración
+  let currentSessions = [];
+
+  // Leemos las sesiones actuales que tiene guardadas
+  if (user.currentSessionToken) {
+    try {
+      // Como ahora es un Array JSON, intentamos convertirlo en un array real de JS
+      currentSessions = JSON.parse(user.currentSessionToken);
+      if (!Array.isArray(currentSessions)) currentSessions = [];
+    } catch (e) {
+      // Si falla (por ejemplo, si tenía un token plano viejo de texto), reiniciamos la lista
+      currentSessions = [];
+    }
+  }
+
+  // Agregamos el nuevo token de este navegador al final de la lista
+  currentSessions.push(token);
+
+  // Si abrió más sesiones de las que permite su plan, expulsamos la más antigua (la primera)
+  while (currentSessions.length > maxAllowedDevices) {
+    currentSessions.shift();
+  }
+
+  // 🔥 ACTUALIZAMOS LA BASE DE DATOS: Guardamos el array como un String JSON
+  await user.update({ 
+    currentSessionToken: JSON.stringify(currentSessions) 
+  });
+
   // Enviar token en una cookie HTTP-only
   res.cookie("token", token, {
     httpOnly: true, // Evita acceso desde JavaScript

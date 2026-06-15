@@ -14,6 +14,7 @@ module.exports = (sequelize, DataTypes) => {
       production_detail.belongsTo(models.production_order, { foreignKey: "productionOrderId" });
       production_detail.belongsTo(models.operation_catalog, { foreignKey: "operationId" });
       production_detail.belongsTo(models.liquidation, { foreignKey: "liquidationId" });
+      production_detail.belongsTo(models.order_cut, { foreignKey: "orderCutId" });
     }
   }
   production_detail.init(
@@ -52,6 +53,14 @@ module.exports = (sequelize, DataTypes) => {
         references: { 
           model: 'liquidation', 
           key: 'id' },
+      },
+      orderCutId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: 'order_cut',
+          key: 'id'
+        }
       },
       quantityDone: {
         type: DataTypes.INTEGER,

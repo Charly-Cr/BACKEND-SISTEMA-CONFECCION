@@ -7,7 +7,7 @@ const getAllTalleres = async () => {
       {
         model: user, // Para traer nombre/email del dueño
         as: "usuarios",
-        attributes: ['id', 'firstName', 'phone', 'role']
+        attributes: ['id', 'firstName', 'phone', 'role', 'maxDevices']
       },
       {
         model: payment,

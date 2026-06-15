@@ -1,4 +1,4 @@
-const { getAllOrders, createOrder, getOneOrder, updateOrder, deleteOrder, getOrderStats } = require('../services/productionOrder.services');
+const { getAllOrders, createOrder, getOneOrder, updateOrder, deleteOrder, getOrderStats, updateCutStatusInOrder } = require('../services/productionOrder.services');
 const catchError = require('../utils/catchError');
 
 const getAll = catchError(async (req, res) => {
@@ -64,4 +64,19 @@ const getStats = catchError(async (req, res) => {
   return res.json(result);
 });
 
-module.exports = { getAll, create, getOne, update, remove, getStats };
+
+const updateCutStatus = catchError(async (req, res) => {
+  
+  const { cutId } = req.params; // Jalamos el ID del corte de la URL
+  const { status } = req.body;   // Jalamos el nuevo estado del body
+  const tallerId = req.user.tallerId;
+
+  const result = await updateCutStatusInOrder(cutId, status, tallerId);
+  
+  return res.status(200).json({
+    message: "Estado del corte actualizado con éxito",
+    data: result
+  });
+});
+
+module.exports = { getAll, create, getOne, update, remove, getStats, updateCutStatus };

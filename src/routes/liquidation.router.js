@@ -15,7 +15,7 @@ liquidationRouter.route('/')
 
 liquidationRouter.route('/:id/pdf')
   // Solo el admin puede echar atrás un pago
-  .get(verifyJWT, verifyRoles('admin'), verifySubscription, verifyPdfAccess, getPDF);
+  .get(verifyJWT, verifyRoles('admin', 'superadmin'), verifySubscription, verifyPdfAccess, getPDF);
 
 liquidationRouter.route('/:id')
   // Solo el admin puede echar atrás un pago

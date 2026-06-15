@@ -1,30 +1,22 @@
 const { Op } = require('sequelize');
-const { getAllUser, createUser, getOneUser, putUser, removeUser, getUserByIdSafe, changePassword } = require('../services/user.services');
+const { getAllUser, createUser, getOneUser, putUser, removeUser, getUserByIdSafe, changePassword, updateMaxDevicesService } = require('../services/user.services');
 const catchError = require('../utils/catchError');
 
 
 const getAll = catchError(async (req, res) => {
-  // 1. Extraemos el rol y el taller del token (req.user)
   const { role, tallerId, id: currentUserId } = req.user;
-  const { page, limit, name } =req.query;
-  // 2. Preparamos el filtro
-  // Si es admin, lo obligamos a ver solo su tallerId
-  let filter = { tallerId: tallerId };
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const search = req.query.search || "";
 
-  // LA CLAVE: Si hay un nombre, lo agregamos al filtro usando un operador de Sequelize
-  if (name) {
-    filter.firstName = { [Op.iLike]: `%${name}%` }; 
-  }
+  // Delegamos el cálculo completo al servicio
+  const results = await getAllUser({
+    role, tallerId, currentUserId, page, limit, search
+  });
 
-  // 3. LA CLAVE: Si es superadmin, borramos el filtro
-  // Al estar el objeto vacío {}, Sequelize traerá TODOS los registros de la DB
-  if (role === 'superadmin') {
-    filter = {}; 
-  }
-  // 4. Llamamos a tu función de servicio pasando el filtro inteligente
-  const results = await getAllUser(filter, page, limit, currentUserId);
   return res.json(results);
 });
+
 
 
 const create = catchError(async (req, res) => {
@@ -188,6 +180,25 @@ const changeMyPassword = catchError(async (req, res) => {
   });
 });
 
+
+const updateMaxDevices = catchError(async (req, res) => {
+  const { userId } = req.params;
+  const { maxDevices } = req.body;
+
+  // 1. Validación primaria antes de llamar al servicio
+  if (!maxDevices || isNaN(maxDevices) || maxDevices < 1) {
+    return res.status(400).json({ message: "El número de dispositivos debe ser mayor o igual a 1" });
+  }
+
+  // 2. Llamamos al servicio (si el usuario no existe, el servicio lanzará el error)
+  const updatedUser = await updateMaxDevicesService(userId, maxDevices);
+
+  // 3. Respondemos con éxito si todo salió bien
+  return res.json({ 
+    message: `Límite actualizado con éxito a ${maxDevices} dispositivos para el usuario ${updatedUser.name || ''}.` 
+  });
+});
+
 module.exports = {
   getAll,
   create,
@@ -197,5 +208,7 @@ module.exports = {
   login,
   logged,
   logout,
-  changeMyPassword
+  changeMyPassword,
+  updateMaxDevices
 };
+

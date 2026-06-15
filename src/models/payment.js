@@ -41,7 +41,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     // 5. Estado del flujo de pago
     status: {
-      type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+      type: DataTypes.ENUM('pending', 'approved', 'rejected', 'waiting_approval'),
       defaultValue: 'pending'
     },
     // 6. Número de operación de Yape/Banco

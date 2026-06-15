@@ -4,6 +4,8 @@ const {
   garment,
   operation_catalog,
   user,
+  order_cut,
+  liquidation,
   sequelize,
 } = require("../models");
 const { Op, fn, col, literal, Sequelize } = require("sequelize");
@@ -23,6 +25,7 @@ const getPayrollReport = async (tallerId, startDate, endDate) => {
     attributes: [
       "userId",
       "productionOrderId",
+      "orderCutId", // <--- Vinculamos el corte específico para separar los registros
       [Sequelize.fn("SUM", Sequelize.col("subtotal")), "totalEarned"],
       [Sequelize.fn("SUM", Sequelize.col("quantityDone")), "totalOperations"],
     ],
@@ -30,6 +33,7 @@ const getPayrollReport = async (tallerId, startDate, endDate) => {
       "userId",
       "user.id",
       "productionOrderId",
+      "orderCutId", // <--- Agrupamos también por el corte
       "production_order.id",
       "production_order->garment.id", 
     ],
@@ -47,13 +51,13 @@ const getPayrollReport = async (tallerId, startDate, endDate) => {
           {
             model: garment,
             attributes: ["id", "name"],
-          },
+          }
         ],
       },
     ],
   });
 
-  // 1. Obtenemos los pasos de forma segura sin romper el GROUP BY
+  // 1. Obtenemos los pasos de forma segura
   const garmentIds = [...new Set(workerStats.map(s => s.production_order?.garmentId))].filter(Boolean);
   
   const garmentSteps = await garment.findAll({
@@ -71,9 +75,25 @@ const getPayrollReport = async (tallerId, startDate, endDate) => {
     stepsMap[g.id] = g.operations?.length || 1;
   });
 
+  // 1.1. Obtenemos los cortes únicos usando los IDs de corte de los detalles
+  const cutIds = [...new Set(workerStats.map(s => s.orderCutId))].filter(Boolean);
+  const cuts = await order_cut.findAll({
+    where: { id: cutIds }
+  });
+  
+  const cutsMap = {};
+  cuts.forEach(c => {
+    // Usamos el ID del corte como llave única, evitando que se pisen entre cortes de la misma OP
+    cutsMap[c.id] = {
+      cutNumber: c.cutNumber,
+      color: c.color
+    };
+  });
+
   let totalEgresos = 0;
   let totalIncome = 0;
   let totalPhysicalPieces = 0;
+  let totalOperationsCount = 0;
   const workerMap = {};
 
   workerStats.forEach((curr) => {
@@ -82,14 +102,13 @@ const getPayrollReport = async (tallerId, startDate, endDate) => {
     const totalOpsHechas = Number(raw.totalOperations || 0);
     const precioVentaUnitario = Number(raw.production_order?.pricePerGarment || 0);
 
-    // 2. DINAMISMO PURO: Aquí ya no importa si son 6, 8 o 10 pasos. 
-    // El sistema lo sabe por la prenda.
     const pasosDeEstaOrden = stepsMap[raw.production_order?.garmentId] || 1;
     const avanceProporcional = totalOpsHechas / pasosDeEstaOrden;
 
     totalEgresos += pagoOperario;
     totalIncome += avanceProporcional * precioVentaUnitario;
     totalPhysicalPieces += avanceProporcional;
+    totalOperationsCount += totalOpsHechas;
 
     if (!workerMap[raw.userId]) {
       workerMap[raw.userId] = {
@@ -102,15 +121,20 @@ const getPayrollReport = async (tallerId, startDate, endDate) => {
     }
 
     workerMap[raw.userId].totalEarned += pagoOperario;
-    // workerMap[raw.userId].totalPieces += Math.round(avanceProporcional);
     workerMap[raw.userId].totalPieces += totalOpsHechas;
+
+    // 2. Obtenemos los datos del corte usando la relación correcta
+    const cutData = cutsMap[raw.orderCutId] || { cutNumber: "N/A", color: "N/A" };
 
     workerMap[raw.userId].details.push({
       orderId: raw.productionOrderId,
       orderNumber: raw.production_order?.orderNumber || "N/A",
+      cutNumber: cutData.cutNumber,
+      color: cutData.color,
       earnedInOrder: pagoOperario,
-      // piecesInOrder: Math.round(avanceProporcional),
       piecesInOrder: totalOpsHechas,
+      totalQuantity: raw.production_order?.totalQuantity || 0,
+      pricePerGarment: raw.production_order?.pricePerGarment || 0,
     });
   });
 
@@ -122,11 +146,15 @@ const getPayrollReport = async (tallerId, startDate, endDate) => {
     profitability: totalIncome > 0 
       ? Number((((totalIncome - totalEgresos) / totalIncome) * 100).toFixed(1))
       : 0,
-    productionCount: Math.round(totalPhysicalPieces),
+    productionCount: totalOperationsCount,
   };
 };
 
+
+
 const getDashboardStats = async (tallerId) => {
+  console.log("Taller ID recibido:", tallerId, typeof tallerId);
+
   // 1. Resumen General (Dinero pendiente y órdenes activas)
   const summaryPromise = production_detail.findOne({
     where: { tallerId, liquidationId: null, active: true },
@@ -137,11 +165,12 @@ const getDashboardStats = async (tallerId) => {
     raw: true,
   });
 
-  // 1. Para contar órdenes activas (las que aún se están trabajando)
+  // Contar órdenes activas
   const activeOrdersCountPromise = production_order.count({
     where: {
       tallerId,
-      status: { [Op.in]: ["pending", "in_process"] }, // Usamos tus ENUMS reales
+      active: true,
+      status: { [Op.in]: ["pending", "in_process"] },
     },
   });
 
@@ -159,42 +188,39 @@ const getDashboardStats = async (tallerId) => {
     limit: 10,
   });
 
-  // 3. Progreso de Órdenes (Para las barras de carga)
-  const ordersProgressPromise = production_order.findAll({
-    where: {
-      tallerId,
-      status: { [Op.in]: ["pending", "in_process"] },
-    },
-    attributes: ["id", "orderNumber", "totalQuantity"],
-    // include: [
-    //   {
-    //     model: production_detail,
-    //     as: "details",
-    //     attributes: [], // No pedimos columnas sueltas de los detalles
-    //     where: { active: true },
-    //     required: false, // Por si una orden aún no tiene registros de producción
-    //   },
-    // ],
-
-    // Agregamos SUM de forma manual para evitar el conflicto del GROUP BY
-    attributes: {
-      include: [
-        [
-          sequelize.literal(`(
+  // 3. Progreso de Cortes (Dinámico por Corte, Color y Orden)
+  const ordersProgressPromise = order_cut.findAll({
+    attributes: [
+      "id",
+      "cutNumber",
+      "color",
+      "quantity",
+      [
+        sequelize.literal(`(
           SELECT COALESCE(SUM("quantityDone"), 0)
           FROM "production_details" AS "details"
-          WHERE "details"."productionOrderId" = "production_order"."id"
+          WHERE "details"."orderCutId" = "order_cut"."id"
           AND "details"."active" = true
         )`),
-          "done",
-        ],
+        "done",
       ],
-    },
+    ],
+    include: [
+      {
+        model: production_order,
+        attributes: ["orderNumber"],
+        where: { 
+          tallerId,
+          active: true 
+        },
+        required: true,
+      },
+    ],
+    order: [[sequelize.literal('"production_order"."createdAt"'), "DESC"]],
     limit: 5,
-    subQuery: false, // Importante para que el LIMIT no rompa la consulta
   });
 
-  // Ejecutamos todo en paralelo para máxima velocidad
+  // Ejecutamos lo principal en paralelo
   const [summary, activeOrders, topPerformers, ordersProgress] =
     await Promise.all([
       summaryPromise,
@@ -203,6 +229,62 @@ const getDashboardStats = async (tallerId) => {
       ordersProgressPromise,
     ]);
 
+  // 4. Mapeo y desglose de operaciones por cada corte
+  const ordersProgressWithOps = await Promise.all(
+    ordersProgress.map(async (cut) => {
+      const done = parseInt(cut.get("done")) || 0;
+      const total = cut.quantity || 0; 
+      const percent = total > 0 ? (done / total) * 100 : 0;
+      const progress = Math.min(Math.round(percent), 100);
+
+      // Consultamos el avance por cada operación en este corte específico
+      const operationsRaw = await production_detail.findAll({
+        where: { orderCutId: cut.id, active: true },
+        attributes: [
+          "operationId",
+          [fn("SUM", col("quantityDone")), "doneQuantity"]
+        ],
+        include: [
+          {
+            model: operation_catalog,
+            attributes: ["name"]
+          }
+        ],
+        group: [
+          "operationId", 
+          "operation_catalog.id", 
+          "operation_catalog.name"
+        ],
+        raw: true
+      });
+
+      // Formateamos las operaciones al formato que tu frontend espera `op.name`, `op.done`, `op.goal`, etc.
+      const operations = operationsRaw.map((op) => {
+        const opDone = parseInt(op.doneQuantity) || 0;
+        const opPercent = total > 0 ? Math.min(Math.round((opDone / total) * 100), 100) : 0;
+
+        return {
+          name: op['operation_catalog.name'] || "Operación desconocida",
+          done: opDone,
+          goal: total,
+          progress: opPercent,
+          isCompleted: opPercent >= 100
+        };
+      });
+
+      return {
+        orderNumber: cut.production_order?.orderNumber || "N/A",
+        cutNumber: cut.cutNumber,
+        color: cut.color,
+        done: done,
+        total: total,
+        progress: progress,
+        status: progress >= 100 ? "completed" : progress > 0 ? "in_progress" : "pending",
+        operations // 🚀 Se inyecta el arreglo de operaciones para el acordeón
+      };
+    })
+  );
+
   return {
     totals: {
       pendingToPay: parseFloat(summary?.totalPending || 0).toFixed(2),
@@ -210,24 +292,69 @@ const getDashboardStats = async (tallerId) => {
       totalPendingRecords: summary?.totalRecords || 0,
     },
     topPerformers: topPerformers.map((tp) => ({
-      name: tp.user.firstName,
+      name: tp.user?.firstName || "Sin nombre",
       amount: parseFloat(tp.get("amount")).toFixed(2),
       pieces: tp.get("pieces"),
     })),
-    ordersProgress: ordersProgress.map((op) => {
-      const done = parseInt(op.get("done")) || 0;
-      const total = op.totalQuantity;
-      const percent = (done / total) * 100;
-
-      return {
-        orderNumber: op.orderNumber,
-        progress: Math.min(Math.round(percent), 100), // <--- TOPE AL 100%
-        total: total,
-        // Enviamos 'done' como prendas físicas para que el frontend diga 3000/3000
-        done: done,
-      };
-    }),
+    ordersProgress: ordersProgressWithOps,
   };
 };
 
-module.exports = { getPayrollReport, getDashboardStats };
+
+const getFinancialSummary = async (startDate, endDate) => {
+  // 1. Traemos los cortes en el periodo incluyendo su orden de producción
+  const cuts = await order_cut.findAll({
+    where: {
+      active: true,
+      createdAt: {
+        [Op.between]: [`${startDate} 00:00:00`, `${endDate} 23:59:59`],
+      }
+    },
+    include: [{
+      model: production_order,
+      attributes: ['pricePerGarment'], // Traemos solo el precio
+      required: true,
+      where: { active: true }
+    }],
+  });
+
+  // --- AGREGA ESTE CONSOLE.LOG PARA INSPECCIONAR ---
+  const debugCuts = cuts.map(cut => ({
+    cutNumber: cut.cutNumber,
+    quantity: cut.quantity,
+    price: cut.production_order?.pricePerGarment,
+    subtotal: (cut.quantity || 0) * (parseFloat(cut.production_order?.pricePerGarment) || 0)
+  }));
+  console.log("Detalle de ingresos por corte:", debugCuts);
+  // --------------------------------------------------
+
+
+  // Calculamos los ingresos totales multiplicando en JS (quantity * pricePerGarment)
+  const totalIncome = cuts.reduce((sum, cut) => {
+    const quantity = cut.quantity || 0;
+    // Accedemos al precio de la orden relacionada
+    const price = parseFloat(cut.production_order?.pricePerGarment) || 0;
+    return sum + (quantity * price);
+  }, 0);
+
+  // 2. Calcular Egresos Totales (Monto de liquidaciones)
+  const totalExpenses = await liquidation.sum('totalAmount', {
+    where: {
+      active: true,
+      endDate: {
+        [Op.between]: [`${startDate} 00:00:00`, `${endDate} 23:59:59`],
+      }
+    }
+  }) || 0;
+
+  // 3. Utilidad Neta
+  const netProfit = totalIncome - totalExpenses;
+
+  return {
+    totalIncome,
+    totalExpenses,
+    netProfit
+  };
+};
+
+module.exports = { getPayrollReport, getDashboardStats, getFinancialSummary };

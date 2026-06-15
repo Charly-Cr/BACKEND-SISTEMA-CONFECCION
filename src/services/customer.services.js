@@ -1,14 +1,36 @@
 const { customer } = require('../models');
+const { Op } = require('sequelize');
 
-const getAllCustomers = async (tallerId, limit, offset) => {
-  // El servicio se limita a la consulta
-  return await customer.findAndCountAll({ 
-    where: { tallerId, active: true },
+const getAllCustomers = async ({ tallerId, page, limit, search }) => {
+  // 1. Cálculo de paginación (lógica técnica de base de datos)
+  const offset = (page - 1) * limit;
+
+  // 2. Construcción del filtro
+  let whereClause = { tallerId, active: true };
+
+  if (search) {
+    whereClause[Op.or] = [
+      { name: { [Op.iLike]: `%${search}%` } },
+      { ruc: { [Op.like]: `%${search}%` } }
+    ];
+  }
+
+  // 3. Ejecución
+  const { count, rows } = await customer.findAndCountAll({ 
+    where: whereClause,
     limit,
     offset,
     distinct: true, 
     order: [['createdAt', 'DESC']] 
   });
+
+  // 4. Retorno formateado
+  return {
+    totalItems: count,
+    totalPages: Math.ceil(count / limit),
+    currentPage: page,
+    customers: rows
+  };
 };
 
 

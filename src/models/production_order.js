@@ -13,6 +13,7 @@ module.exports = (sequelize, DataTypes) => {
       production_order.belongsTo(models.customer, { foreignKey: "customerId" });
       production_order.belongsTo(models.garment, { foreignKey: "garmentId" });
       production_order.hasMany(models.production_detail, { as: 'details', foreignKey: 'productionOrderId' });
+      production_order.hasMany(models.order_cut, { foreignKey: 'productionOrderId' });
     }
   }
   production_order.init(
