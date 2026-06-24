@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const { taller, user, payment, sequelize } = require("../models");
-const { uploadToCloudinary } = require("../utils/cloudinary");
+const { uploadToCloudinary, deleteFromCloudinary } = require("../utils/cloudinary");
 const { activate } = require("./subscription.services");
 const { notifyAdminNewPayment } = require("./notification.service");
 
@@ -246,6 +246,11 @@ const deleteClaim = async (paymentId) => {
         const error = new Error("No puedes eliminar un pago que ya se encuentra aprobado.");
         error.statusCode = 400;
         throw error;
+    }
+
+    // Si existe una URL de imagen, bórrala de Cloudinary antes de destruir el registro
+    if (claim.voucherImage) {
+        await deleteFromCloudinary(claim.voucherImage);
     }
 
     // Eliminamos físicamente la orden de la base de datos

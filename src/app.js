@@ -16,14 +16,24 @@ const limiter = rateLimit({
   message: {
     message: "Demasiadas peticiones desde esta IP, intenta de nuevo en 15 minutos, bro."
   },
+  standardHeaders: true, // Retorna info del límite en los headers
+  legacyHeaders: false,
 });
 
 app.set("trust proxy", 1);
 
 
+// Los dominios oficiales SIEMPRE están permitidos
+const whitelist = ["https://destajopro.com", "https://www.destajopro.com"];
+
+// Solo si NO estamos en producción, le abrimos la puerta al localhost
+if (process.env.NODE_ENV !== 'production') {
+    whitelist.push("http://localhost:5173");
+}
+
 app.use(cors({
-  origin: "http://localhost:5173",
-  credentials: true
+    origin: whitelist,
+    credentials: true  //PERMITE EL ENVIO DE COOKIES HTTPONLY
 }));
 
 
