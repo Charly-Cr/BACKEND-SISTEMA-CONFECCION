@@ -1,4 +1,5 @@
 const { taller, user, payment, subscription, sequelize } = require('../models');
+const dayjs = require('dayjs');
 
 const getAllTalleres = async () => {
   return await taller.findAll({ 
@@ -36,8 +37,9 @@ const createTaller = async (data) => {
       tallerId: newTaller.id,
       planType: 'estandar', // Este es uno de tus ENUMs
       status: 'active',
-      startDate: new Date(),
-      endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // 1 año de vigencia
+      startDate: dayjs().toDate(),
+      endDate: dayjs().add(1, 'month').toDate(), // 1 mes exacto usando Dayjs
+      // endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // 1 año de vigencia
       maxUsersAllowed: 10, // Tu valor por defecto
       pricePaid: 0,
       paymentReference: 'REGISTRO_INICIAL'
