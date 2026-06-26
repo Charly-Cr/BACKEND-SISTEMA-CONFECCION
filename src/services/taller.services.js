@@ -1,4 +1,4 @@
-const { taller, user, payment } = require('../models');
+const { taller, user, payment, subscription, sequelize } = require('../models');
 
 const getAllTalleres = async () => {
   return await taller.findAll({ 
@@ -24,7 +24,31 @@ const getAllTalleres = async () => {
 const createTaller = async (data) => {
   const existing = await taller.findOne({ where: { name: data.name } });
   if (existing) return "ALREADY_EXISTS";
-  return await taller.create(data);
+
+  const transaction = await sequelize.transaction();
+
+  try {
+    // 1. Creamos el taller
+    const newTaller = await taller.create(data, { transaction });
+
+    // 2. Creamos la suscripción inicial usando un plan de los que SÍ tienes definidos
+    await subscription.create({
+      tallerId: newTaller.id,
+      planType: 'estandar', // Este es uno de tus ENUMs
+      status: 'active',
+      startDate: new Date(),
+      endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // 1 año de vigencia
+      maxUsersAllowed: 10, // Tu valor por defecto
+      pricePaid: 0,
+      paymentReference: 'REGISTRO_INICIAL'
+    }, { transaction });
+
+    await transaction.commit();
+    return newTaller;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
 };
 
 const getTallerById = async (id) => {

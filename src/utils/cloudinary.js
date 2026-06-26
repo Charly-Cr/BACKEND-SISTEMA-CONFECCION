@@ -45,7 +45,9 @@ const uploadToCloudinary = async (file, options = {}) => {
  */
 const deleteFromCloudinary = async (url) => {
     try {
-        if (!url || url.includes('no-image.jpg')) return;
+        if (!url || url.includes('no-image.jpg')) {
+            return;
+        }
 
         // Lógica de extracción de ID (Tu lógica está bien, la mantenemos)
         const urlSections = url.split('/');
