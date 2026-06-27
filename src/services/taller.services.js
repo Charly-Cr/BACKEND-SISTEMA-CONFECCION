@@ -1,9 +1,16 @@
 const { taller, user, payment, subscription, sequelize } = require('../models');
+const { Op } = require("sequelize");
 const dayjs = require('dayjs');
 
 const getAllTalleres = async () => {
   return await taller.findAll({ 
-    where: { active: true },
+    where: { 
+      active: true,
+      // Filtro para ocultar el usuario ROOT del listado
+      name: {
+        [Op.ne]: "SISTEMA_ADMIN_SAAS" 
+      }
+     },
     include: [
       {
         model: user, // Para traer nombre/email del dueño
@@ -67,12 +74,21 @@ const updateTaller = async (id, body) => {
 };
 
 const removeTaller = async (id) => {
-  // Soft delete para no perder historial
-  const result = await taller.update({ active: false }, {
-    where: { id }
-  });
-  // 2. Si result[0] es 0, no encontró ese taller para "borrarlo"
-  if (result[0] === 0) return null;
+  // 1. Find the workshop first
+  const workshop = await taller.findByPk(id);
+  
+  // If not found, return null
+  if (!workshop) return null;
+
+  // 2. Security: Check if it's the root system account
+  if (workshop.name === "SISTEMA_ADMIN_SAAS") {
+     const error = new Error("Cannot delete the main system account.");
+     error.statusCode = 403;
+     throw error;
+  }
+
+  // 3. Perform the soft delete
+  await workshop.update({ active: false });
 
   return true;
 };
