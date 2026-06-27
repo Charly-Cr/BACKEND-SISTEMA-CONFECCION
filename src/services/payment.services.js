@@ -118,6 +118,9 @@ const uploadVoucherService = async (paymentId, file) => {
     public_id: `voucher_${claim.claimCode}`,
   });
 
+  // Si la subida falló, lanzamos error para no actualizar la BD con una URL vacía
+  if (!uploadResult) throw new Error("Error al subir el comprobante a la nube");
+
   // 2. Actualizamos el registro del pago
   await claim.update({
     voucherImage: uploadResult.secure_url,

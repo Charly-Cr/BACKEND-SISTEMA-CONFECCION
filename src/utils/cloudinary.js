@@ -13,6 +13,7 @@ cloudinary.config({
  * @param {Object} file - Archivo de Multer
  * @param {Object} options - { folder: 'nombre_carpeta', public_id: 'nombre_archivo' }
  */
+
 const uploadToCloudinary = async (file, options = {}) => {
     const { path: filePath, filename } = file;
     
@@ -20,18 +21,20 @@ const uploadToCloudinary = async (file, options = {}) => {
     const targetFolder = options.folder || "taller_app";
     
     try {
-        // Usamos el public_id que mandemos (como el claimCode) o el nombre original
         const fileName = options.public_id || path.parse(filename).name;
-        const filePathOnCloudinary = `${targetFolder}/${fileName}`;
 
-        const result = await cloudinary.uploader.upload( 
-            filePath, 
-            { "public_id": filePathOnCloudinary }
-        );
+        // Configuración mejorada
+        const result = await cloudinary.uploader.upload(filePath, {
+            folder: targetFolder,      // Cloudinary gestiona la carpeta nativamente
+            public_id: fileName,       // Nombre del archivo
+            unique_filename: true,     // Añade un sufijo aleatorio para evitar conflictos
+            overwrite: false           // No sobrescribir si el nombre ya existe
+        });
+
         return result;
     } catch (error) {
         console.error("❌ Cloudinary Error:", error);
-        return null; // Retornar null es mejor para validar en el servicio
+        return null;
     } finally {
         // Borrar el archivo temporal de tu servidor (EC2) pase lo que pase
         if (fs.existsSync(filePath)) {
