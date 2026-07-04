@@ -11,6 +11,7 @@ module.exports = (sequelize, DataTypes) => {
       // define association here
       taller.hasMany(models.user, { foreignKey: "tallerId", as: "usuarios" });
       taller.hasMany(models.payment, { foreignKey: "tallerId", as: "payments" });
+      taller.hasOne(models.subscription, { foreignKey: "tallerId", as: "subscription" })
       //taller.hasMany(models.cliente, { foreignKey: "tallerId", as: "clientes" });
     }
   }

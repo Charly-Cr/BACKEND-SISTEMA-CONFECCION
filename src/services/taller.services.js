@@ -7,6 +7,7 @@ const getAllTalleres = async () => {
     where: { 
       active: true,
       // Filtro para ocultar el usuario ROOT del listado
+      // [Op.ne] = Operator Not Equal
       name: {
         [Op.ne]: "SISTEMA_ADMIN_SAAS" 
       }
@@ -24,6 +25,11 @@ const getAllTalleres = async () => {
         // Si quieres solo los pendientes para no saturar:
         // where: { status: 'pending' }, 
         // required: false // Importante para que no oculte talleres sin pagos
+      },
+      {
+        model: subscription,
+        as: 'subscription', 
+        required: false
       }
     ]
   });

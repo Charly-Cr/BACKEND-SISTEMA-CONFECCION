@@ -1,6 +1,6 @@
 // services/subscription.service.js
 const { subscription, taller, payment, user } = require("../models");
-const { Op } = require("sequelize");
+// const { Op } = require("sequelize");
 const dayjs = require("dayjs");
 
 const activate = async ({
@@ -62,51 +62,93 @@ const activate = async ({
 
 
 
-const getStatus = async (tallerId) => {
+// const getStatus = async (tallerId) => {
 
+//   const activeSub = await subscription.findOne({
+//     where: {
+//       tallerId,
+//       status: "active",
+//       endDate: {
+//         [Op.gt]: new Date(),
+//       },
+//     },
+//     order: [["endDate", "DESC"]],
+//   });
+
+//   if (!activeSub) return null;
+
+//   // Contar usuarios vinculados al taller
+//   const usersCount = await user.count({
+//     where: { tallerId },
+//   });
+
+
+//   const today = dayjs();
+//   const expiration = dayjs(activeSub.endDate);
+  
+//   let daysLeft = expiration.diff(today, "day");
+
+//   let status = activeSub.status;
+
+//   if (daysLeft <= 0) {
+//     status = "expired";
+//   } else if (daysLeft <= 7) {
+//     status = "expiring_soon";
+//   }
+
+//   // Evitar negativos
+//   daysLeft = daysLeft > 0 ? daysLeft : 0;
+
+//   // Warning solo si está entre 1 y 7 días
+//   const expirationWarning = daysLeft > 0 && daysLeft <= 7;
+
+//   return {
+//     status,
+//     endDate: activeSub.endDate,
+//     daysLeft,
+//     expirationWarning,
+//     planType: activeSub.planType,
+//     maxUsersAllowed: activeSub.maxUsersAllowed || 0,
+//     pricePaid: activeSub.pricePaid || "0.00",
+//     currentUsersCount: usersCount,
+//   };
+// };
+
+const getStatus = async (tallerId) => {
+  // 1. Buscamos la última suscripción (sin filtrar por fecha aquí)
   const activeSub = await subscription.findOne({
     where: {
       tallerId,
       status: "active",
-      endDate: {
-        [Op.gt]: new Date(),
-      },
     },
     order: [["endDate", "DESC"]],
   });
 
+  // 2. Si no existe ninguna suscripción, ahí sí devolvemos null
   if (!activeSub) return null;
 
-  // Contar usuarios vinculados al taller
-  const usersCount = await user.count({
-    where: { tallerId },
-  });
-
+  const usersCount = await user.count({ where: { tallerId } });
 
   const today = dayjs();
   const expiration = dayjs(activeSub.endDate);
   
   let daysLeft = expiration.diff(today, "day");
-
-  let status = activeSub.status;
-
-  if (daysLeft <= 0) {
+  
+  // 3. Calculamos el estado basándonos en la fecha aquí, con calma
+  let status = "active";
+  if (daysLeft < 0) {
     status = "expired";
   } else if (daysLeft <= 7) {
     status = "expiring_soon";
   }
 
-  // Evitar negativos
-  daysLeft = daysLeft > 0 ? daysLeft : 0;
-
-  // Warning solo si está entre 1 y 7 días
-  const expirationWarning = daysLeft > 0 && daysLeft <= 7;
+  daysLeft = Math.max(daysLeft, 0);
 
   return {
     status,
     endDate: activeSub.endDate,
     daysLeft,
-    expirationWarning,
+    expirationWarning: daysLeft > 0 && daysLeft <= 7,
     planType: activeSub.planType,
     maxUsersAllowed: activeSub.maxUsersAllowed || 0,
     pricePaid: activeSub.pricePaid || "0.00",
