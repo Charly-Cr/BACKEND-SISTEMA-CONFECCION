@@ -1,4 +1,9 @@
 const errorHandler = (error, _req, res, _next) => {
+
+    // console.log("--- ERROR ENTRANTE ---");
+    // console.log("Tipo:", error.name);
+    // console.log("Mensaje:", error.message);
+
     const errObj = {};
 
     // 1. Errores de Validación de Sequelize

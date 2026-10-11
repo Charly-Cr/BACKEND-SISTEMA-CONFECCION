@@ -1,5 +1,14 @@
-const { getAllOrders, createOrder, getOneOrder, updateOrder, deleteOrder, getOrderStats, updateCutStatusInOrder } = require('../services/productionOrder.services');
-const catchError = require('../utils/catchError');
+const {
+  getAllOrders,
+  createOrder,
+  getOneOrder,
+  updateOrder,
+  deleteOrder,
+  getOrderStats,
+  updateCutStatusInOrder,
+} = require("../services/productionOrder.services");
+const catchError = require("../utils/catchError");
+const { UniqueConstraintError } = require("sequelize");
 
 const getAll = catchError(async (req, res) => {
   // 1. Preparación de parámetros
@@ -16,15 +25,40 @@ const getAll = catchError(async (req, res) => {
     totalItems: count,
     totalPages: Math.ceil(count / limit),
     currentPage: page,
-    orders: rows 
+    orders: rows,
   });
 });
 
+// const create = catchError(async (req, res) => {
+//   const tallerId = req.user.tallerId;
+//   const result = await createOrder({ ...req.body, tallerId });
+//   return res.status(201).json(result);
+// });
 
 const create = catchError(async (req, res) => {
-  const tallerId = req.user.tallerId;
-  const result = await createOrder({ ...req.body, tallerId });
-  return res.status(201).json(result);
+  try {
+    const tallerId = req.user.tallerId;
+
+    const result = await createOrder({
+      ...req.body,
+      tallerId,
+    });
+
+    return res.status(201).json(result);
+  } catch (error) {
+    if (error instanceof UniqueConstraintError) {
+      return res.status(422).json({
+        errors: [
+          {
+            field: "orderNumber",
+            message: "Este número de orden ya se encuentra registrado.",
+          },
+        ],
+      });
+    }
+
+    throw error;
+  }
 });
 
 const getOne = catchError(async (req, res) => {
@@ -51,32 +85,37 @@ const remove = catchError(async (req, res) => {
   return res.sendStatus(204);
 });
 
-
 //OBTENER ESTADISTICAS DE PEDIDO
 const getStats = catchError(async (req, res) => {
   const { id } = req.params;
   const { tallerId } = req.user;
-  
+
   const result = await getOrderStats(id, tallerId);
-  
+
   if (!result) return res.status(404).json({ message: "Order not found" });
-  
+
   return res.json(result);
 });
 
-
 const updateCutStatus = catchError(async (req, res) => {
-  
   const { cutId } = req.params; // Jalamos el ID del corte de la URL
-  const { status } = req.body;   // Jalamos el nuevo estado del body
+  const { status } = req.body; // Jalamos el nuevo estado del body
   const tallerId = req.user.tallerId;
 
   const result = await updateCutStatusInOrder(cutId, status, tallerId);
-  
+
   return res.status(200).json({
     message: "Estado del corte actualizado con éxito",
-    data: result
+    data: result,
   });
 });
 
-module.exports = { getAll, create, getOne, update, remove, getStats, updateCutStatus };
+module.exports = {
+  getAll,
+  create,
+  getOne,
+  update,
+  remove,
+  getStats,
+  updateCutStatus,
+};

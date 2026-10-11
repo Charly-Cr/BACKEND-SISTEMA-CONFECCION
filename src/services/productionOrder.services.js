@@ -72,7 +72,6 @@ const createOrder = async (orderData) => {
   } catch (error) {
     // Si algo falla, deshacemos todo inmediatamente para evitar datos corruptos
     await t.rollback();
-    console.error("❌ Error en la transacción de createOrder:", error);
     throw error;
   }
 };

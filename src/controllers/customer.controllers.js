@@ -7,6 +7,8 @@ const {
 } = require('../services/customer.services');
 const catchError = require('../utils/catchError');
 
+const { UniqueConstraintError } = require("sequelize");
+
 const getAll = catchError(async (req, res) => {
   const { tallerId } = req.user;
   
@@ -28,9 +30,24 @@ const getAll = catchError(async (req, res) => {
 
 
 const create = catchError(async (req, res) => {
-  const tallerId = req.user.tallerId;
-  const result = await createCustomer({ ...req.body, tallerId });
-  return res.status(201).json(result);
+  try {
+    const tallerId = req.user.tallerId;
+    const result = await createCustomer({ ...req.body, tallerId })
+    return res.status(201).json(result);
+  } catch (error) {
+    if (error instanceof UniqueConstraintError) {
+      return res.status(422).json({
+        errors: [
+          {
+            field: "ruc",
+            message: "Este RUC ya se encuentra registrado."
+          }
+        ]
+      });
+    }
+
+    throw error;
+  }
 });
 
 const getOne = catchError(async (req, res) => {
