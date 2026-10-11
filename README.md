@@ -4,20 +4,20 @@ Production REST API for garment manufacturing operations. Automates production o
 
 **Live:** https://destajopro.com | **Stack:** Node.js + Express + PostgreSQL + Sequelize + JWT
 
-## 🚀 Features
+## Features
 - **Production Management:** Orders, cutting, batching, progress tracking
 - **Payroll Automation:** Piece-rate (destajo) calculation with transactional integrity
 - **Inventory Control:** Stock management with optimized PostgreSQL queries
 - **Secure Auth:** JWT + HttpOnly Cookies + RBAC (3 roles: admin, supervisor, operator)
 - **Deployment:** 【entity-AWS¦canonical_name=AWS】 EC2 + RDS + CI/CD + CloudWatch
 
-## 🛠️ Tech Stack
+## Tech Stack
 - **Backend:** Node.js, Express.js, JavaScript, Sequelize ORM
 - **Database:** PostgreSQL (migrations, indexes, transactions)
 - **Auth:** JWT, HttpOnly Cookies, RBAC, bcrypt
 - **DevOps:** 【entity-AWS¦canonical_name=AWS】 EC2, RDS, GitHub Actions, PM2
 
-## 📦 Installation
+## Installation
 
 ```bash
 git clone https://github.com/Charly-Cr/BACKEND-SISTEMA-CONFECCION.git
